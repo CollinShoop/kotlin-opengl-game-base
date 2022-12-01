@@ -1,8 +1,7 @@
-package com.cms.lwjgldemo.gl
+package com.cms.engine.lwjgl.window
 
-import com.cms.lwjgldemo.gl.textures.Texture
-import com.cms.lwjgldemo.gl.view.LetterBoxView
-import org.lwjgl.Version
+import com.cms.engine.lwjgl.sprite.Sprite
+import com.cms.engine.lwjgl.window.view.LetterBoxView
 import org.lwjgl.glfw.*
 import org.lwjgl.opengl.ARBFramebufferObject.*
 import org.lwjgl.opengl.GL
@@ -13,36 +12,40 @@ import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
 import java.awt.geom.Rectangle2D
 
-class Demo {
+data class GameWindow(
+    val graphicWidth: Float = 1920f,
+    val graphicHeight: Float = 1080f,
+    val windowWidth: Int = 500,
+    val windowHeight: Int = 500,
+    val windowTitle: String) {
 
-    // coordinate system width and height with a bottom-left origin
-    private val width: Float = 1920f
-    private val height: Float = 1080f
+    var debug: Boolean = false
     
-    // The window handle
-    private var window: Long = 0
-    private var debugProc: Callback? = null
+    // Window
+    private var windowId: Long = 0
+    private var openglDebugCallback: Callback? = null
 
-    // last coordinates of cursor location on screen
+    // Mouse / Keyboard Inputs
     private var mouseXPos: Float = 0f
     private var mouseYPos: Float = 0f
 
-    private var boxView = LetterBoxView(this.width, this.height)
+    // Graphics Helpers
+    private var boxView = LetterBoxView(this.graphicWidth, this.graphicHeight)
 
-    private var textCursor = Texture("red.png")
-    private var textBg = Texture("background.png")
+    // Temprary assets to be removed
+    private var textCursor = Sprite("red.png")
+    private var textBg = Sprite("background.png")
 
-    // Multisampled framebuffer to do anti-aliasing
+    // OpenGL Antialiasing
     // See https://github.com/LWJGL/lwjgl3-demos/blob/main/src/org/lwjgl/demo/opengl/fbo/MultisampledFboDemo.java
-    private var useMultisampledFBO = true
+    private var antialiasingEnabled = true
     private var colorRenderBuffer = 0
     private var depthRenderBuffer = 0
     private var fboId = 0
-    private var samples = 8
-    private var resetFrameBuffer = false
+    private var antialiasSampling = 8
+    private var resetFbo = false
 
     fun run() {
-        println("Hello LWJGL " + Version.getVersion() + "!")
         try {
             init()
             loop()
@@ -56,6 +59,7 @@ class Demo {
     }
 
     private fun init() {
+        println("Initializing graphics...")
         // Setup an error callback. The default implementation
         // will print the error message in System.err.
         GLFWErrorCallback.createPrint(System.err).set()
@@ -71,45 +75,55 @@ class Demo {
         GLFW.glfwWindowHint(GLFW.GLFW_CONTEXT_VERSION_MINOR, 1)
 
         // Create the window
-        window = GLFW.glfwCreateWindow(500, 500, "LWJGL Demo", MemoryUtil.NULL, MemoryUtil.NULL)
-        if (window == MemoryUtil.NULL) throw RuntimeException("Failed to create the GLFW window")
+        windowId = GLFW.glfwCreateWindow(windowWidth, windowHeight, windowTitle, MemoryUtil.NULL, MemoryUtil.NULL)
+        if (windowId == MemoryUtil.NULL) throw RuntimeException("Failed to create the GLFW window")
 
         // Setup a key callback. It will be called every time a key is pressed, repeated or released.
-        GLFW.glfwSetCursorPosCallback(window) { _, xpos, ypos ->
-            println("Mouse detected at position ${xpos},${ypos}")
+        GLFW.glfwSetCursorPosCallback(windowId) { _, xpos, ypos ->
             mouseXPos = xpos.toFloat()
             mouseYPos = ypos.toFloat()
+            val virtualPos = boxView.projectScreenPointToVirtual(mouseXPos, mouseYPos)
+            debug("glfwSetCursorPosCallback: xRaw=${xpos}; yRaw=${ypos}; xGraphic=${virtualPos.x}; yGraphic=${virtualPos.y};")
         }
-        GLFW.glfwSetKeyCallback(window) { window: Long, key: Int, scancode: Int, action: Int, mods: Int ->
+        GLFW.glfwSetMouseButtonCallback(windowId) { _, button, action, mods ->
+            debug("glfwSetMouseButtonCallback: button=${button}; action=${action}; mods=${mods};")
+        }
+        GLFW.glfwSetKeyCallback(windowId) { window: Long, key: Int, scancode: Int, action: Int, mods: Int ->
+            debug("glfwSetKeyCallback: key=${key}; scancode=${scancode}; action=${action}; mods=${mods};")
             if (key == GLFW.GLFW_KEY_ESCAPE && action == GLFW.GLFW_RELEASE) GLFW.glfwSetWindowShouldClose(window, true) // We will detect this in the rendering loop
         }
-        GLFW.glfwSetWindowRefreshCallback(window) { window: Long -> render() }
-        GLFW.glfwSetWindowSizeCallback(window) { window: Long, width: Int, height: Int ->
-            windowSizeChanged(window, width, height)
+        GLFW.glfwSetScrollCallback(windowId) { _, xoffset, yoffset ->
+            debug("glfwSetScrollCallback: xoffset=${xoffset}; yoffset=${yoffset};")
         }
-        GLFW.glfwSetFramebufferSizeCallback(window) { window, width, height ->
-            framebufferSizeChanged(window, width, height)
+        GLFW.glfwSetWindowRefreshCallback(windowId) { window: Long -> render() }
+        GLFW.glfwSetWindowSizeCallback(windowId) { window: Long, width: Int, height: Int ->
+            debug("glfwSetWindowSizeCallback: width=${width}; height=${height};")
+            windowSizeChanged(width, height)
+        }
+        GLFW.glfwSetFramebufferSizeCallback(windowId) { window, width, height ->
+            debug("glfwSetFramebufferSizeCallback: width=${width}; height=${height};")
+            framebufferSizeChanged(width, height)
         }
         MemoryStack.stackPush().use { stack ->
             val pWidth = stack.mallocInt(1) // int*
             val pHeight = stack.mallocInt(1) // int*
 
             // Get the window size passed to glfwCreateWindow
-            GLFW.glfwGetWindowSize(window, pWidth, pHeight)
+            GLFW.glfwGetWindowSize(windowId, pWidth, pHeight)
 
             // Get the resolution of the primary monitor
             val vidmode = GLFW.glfwGetVideoMode(GLFW.glfwGetPrimaryMonitor())
 
             // Center the window
             GLFW.glfwSetWindowPos(
-                window,
+                windowId,
                 (vidmode!!.width() - pWidth[0]) / 2,
                 (vidmode.height() - pHeight[0]) / 2
             )
         }
 
         // Make the OpenGL context current
-        GLFW.glfwMakeContextCurrent(window)
+        GLFW.glfwMakeContextCurrent(windowId)
 
         // This line is critical for LWJGL's interoperation with GLFW's
         // OpenGL context, or any context that is managed externally.
@@ -121,40 +135,43 @@ class Demo {
         debugCapabilities()
 
         // Keep track of debug callback
-        debugProc = GLUtil.setupDebugMessageCallback()
+        openglDebugCallback = GLUtil.setupDebugMessageCallback()
 
         // Enable v-sync
         GLFW.glfwSwapInterval(1)
 
         // Make the window visible
-        GLFW.glfwShowWindow(window)
+        GLFW.glfwShowWindow(windowId)
 
         glfwInvoke(
-            window,
+            windowId,
             { window: Long, width: Int, height: Int ->
                 windowSizeChanged(
-                    window,
                     width,
                     height
                 )
             }) { window: Long, width: Int, height: Int ->
             framebufferSizeChanged(
-                window,
                 width,
                 height
             )
         }
     }
 
-    private fun windowSizeChanged(window: Long, width: Int, height: Int) {
-        println("Window size changed to ${width},${height}")
-        resetFrameBuffer = true
+    private fun debug(msg: String) {
+        if (!debug) {
+            return
+        }
+        println("DEBUG GameWindow ${System.currentTimeMillis()} ${msg}")
+    }
+
+    private fun windowSizeChanged(width: Int, height: Int) {
+        resetFbo = true
         boxView.setBufferSize(width.toFloat(), height.toFloat())
     }
 
-    private fun framebufferSizeChanged(window: Long, width: Int, height: Int) {
-        println("Frame buffer size changed to ${width},${height}")
-        resetFrameBuffer = true
+    private fun framebufferSizeChanged(width: Int, height: Int) {
+        resetFbo = true
         boxView.setBufferSize(width.toFloat(), height.toFloat())
     }
 
@@ -203,7 +220,7 @@ class Demo {
     }
 
     fun createFramebufferObject() {
-        if (!useMultisampledFBO) {
+        if (!antialiasingEnabled) {
             return
         }
         val width: Int = boxView.bufferWidth.toInt()
@@ -213,10 +230,10 @@ class Demo {
         fboId = glGenFramebuffers()
         glBindFramebuffer(GL_FRAMEBUFFER, fboId)
         glBindRenderbuffer(GL_RENDERBUFFER, colorRenderBuffer)
-        glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_RGBA8, width, height)
+        glRenderbufferStorageMultisample(GL_RENDERBUFFER, antialiasSampling, GL_RGBA8, width, height)
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorRenderBuffer)
         glBindRenderbuffer(GL_RENDERBUFFER, depthRenderBuffer)
-        glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8, width, height)
+        glRenderbufferStorageMultisample(GL_RENDERBUFFER, antialiasSampling, GL_DEPTH24_STENCIL8, width, height)
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRenderBuffer)
         val fboStatus: Int = glCheckFramebufferStatus(GL_FRAMEBUFFER)
         if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
@@ -226,7 +243,7 @@ class Demo {
     }
 
     fun resizeFramebufferTexture() {
-        if (!useMultisampledFBO) {
+        if (!antialiasingEnabled) {
             return
         }
         glDeleteRenderbuffers(depthRenderBuffer)
@@ -245,18 +262,18 @@ class Demo {
         glClearColor(0f, 0f, 0f, 0f)
 
         // max sampling debug
-        samples = glGetInteger(GL_MAX_SAMPLES);
-        System.err.println("Using " + samples + "x multisampling")
+        antialiasSampling = glGetInteger(GL_MAX_SAMPLES);
+        System.err.println("Using " + antialiasSampling + "x multisampling")
 
         /* Initially create the FBO with color texture and renderbuffer */
         createFramebufferObject()
 
         // Run the rendering loop until the user has attempted to close
         // the window or has pressed the ESCAPE key.
-        while (!GLFW.glfwWindowShouldClose(window)) {
-            if (resetFrameBuffer) {
+        while (!GLFW.glfwWindowShouldClose(windowId)) {
+            if (resetFbo) {
                 resizeFramebufferTexture()
-                resetFrameBuffer = false
+                resetFbo = false
             }
 
             // Poll for window events. The key callback above will only be
@@ -276,7 +293,7 @@ class Demo {
         val mouseMappedToVirtual = boxView.projectScreenPointToVirtual(mouseXPos, mouseYPos)
 
         // render to custom frame buffer
-        if (useMultisampledFBO) {
+        if (antialiasingEnabled) {
             glBindFramebuffer(GL_FRAMEBUFFER, fboId);
         }
 
@@ -299,14 +316,14 @@ class Demo {
         glRectf(marginX, marginY, 1 - marginX, 1 - marginY)
 
         // draw background texture
-        textBg.render(boxView.projectVirtualRect(Rectangle2D.Float(0f, 0f, width, height)))
+        textBg.render(boxView.projectVirtualRect(Rectangle2D.Float(0f, 0f, graphicWidth, graphicHeight)))
 
         // highlight the grid cell with the mouse hovered
-        val gridSize = (width / 32).toInt()
+        val gridSize = (graphicWidth / 32).toInt()
         val highlightGridX = (mouseMappedToVirtual.x / gridSize).toInt() * gridSize
         val highlightGridY = (mouseMappedToVirtual.y / gridSize).toInt() * gridSize
         // draw grid highlight only if it's within virtual view
-        if (highlightGridX >= 0 && highlightGridX < width && highlightGridY >= 0 && highlightGridY < height) {
+        if (highlightGridX >= 0 && highlightGridX < graphicWidth && highlightGridY >= 0 && highlightGridY < graphicHeight) {
             glColorBackgroundHighlight()
             glRectV(highlightGridX, highlightGridY, gridSize, gridSize)
         }
@@ -314,13 +331,13 @@ class Demo {
         // background grid
         glColorGridLines()
         glBegin(GL_LINES)
-            for (x in gridSize..width.toInt()-gridSize step gridSize) {
+            for (x in gridSize..graphicWidth.toInt()-gridSize step gridSize) {
                 glVertexV(x, 0)
-                glVertexV(x, height)
+                glVertexV(x, graphicHeight)
             }
-            for (y in gridSize..height.toInt()-gridSize step gridSize) {
+            for (y in gridSize..graphicHeight.toInt()-gridSize step gridSize) {
                 glVertexV(0, y)
-                glVertexV(width, y)
+                glVertexV(graphicWidth, y)
             }
         glEnd()
 
@@ -328,7 +345,7 @@ class Demo {
         glBegin(GL_LINES)
             glColorLines()
             glVertexV(0f, 0f)
-            glVertexV(width / 2, height / 2)
+            glVertexV(graphicWidth / 2, graphicHeight / 2)
 
             // draw line to mouse in view space
             glVertexS(0f, 0f)
@@ -353,7 +370,7 @@ class Demo {
         // draw cursor texture
         textCursor.render(cursorBox)
 
-        if (useMultisampledFBO) {
+        if (antialiasingEnabled) {
             // write to default frame buffer
             glBindFramebuffer(GL_FRAMEBUFFER, 0)
             // setup blit to read from custom frame buffer
@@ -365,7 +382,7 @@ class Demo {
         }
 
         // show the latest drawing
-        GLFW.glfwSwapBuffers(window)
+        GLFW.glfwSwapBuffers(windowId)
     }
 
     /*
@@ -424,22 +441,15 @@ class Demo {
 
     private fun destroy() {
         GL.setCapabilities(null)
-        if (debugProc != null) {
-            debugProc!!.free()
+        if (openglDebugCallback != null) {
+            openglDebugCallback!!.free()
         }
         // Free the window callbacks and destroy the window
-        Callbacks.glfwFreeCallbacks(window)
-        GLFW.glfwDestroyWindow(window)
+        Callbacks.glfwFreeCallbacks(windowId)
+        GLFW.glfwDestroyWindow(windowId)
 
         // Terminate GLFW and free the error callback
         GLFW.glfwTerminate()
         GLFW.glfwSetErrorCallback(null)!!.free()
-    }
-
-    companion object {
-        @JvmStatic
-        fun main(args: Array<String>) {
-            Demo().run()
-        }
     }
 }

@@ -67,7 +67,7 @@
                             <finalName>demo</finalName>
                             <archive>
                                 <manifest>
-                                    <mainClass>com.cms.lwjgldemo.gl.Demo</mainClass>
+                                    <mainClass>com.cms.engine.Demo</mainClass>
                                 </manifest>
                             </archive>
                             <descriptorRefs>

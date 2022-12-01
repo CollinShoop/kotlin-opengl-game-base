@@ -1,4 +1,4 @@
-package com.cms.lwjgldemo.util
+package com.cms.engine.lwjgl.util
 
 import org.lwjgl.BufferUtils
 import java.io.*

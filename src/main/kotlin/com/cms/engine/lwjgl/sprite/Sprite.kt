@@ -1,18 +1,17 @@
-package com.cms.lwjgldemo.gl.textures
+package com.cms.engine.lwjgl.sprite
 
-import com.cms.lwjgldemo.util.AssetUtils
+import com.cms.engine.lwjgl.util.AssetUtils
 import org.lwjgl.opengl.GL11.*
 import org.lwjgl.stb.STBImage
 import org.lwjgl.stb.STBImage.stbi_load_from_memory
 import org.lwjgl.system.MemoryStack
-import java.awt.geom.Point2D
 import java.awt.geom.Rectangle2D
 import java.nio.ByteBuffer
 import kotlin.math.roundToInt
 
 // Resources
 // https://learnopengl.com/Getting-started/Textures
-class Texture(private var assetName: String) {
+class Sprite(private var assetName: String) {
 
     var id: Int = 0
     var w = 0f
