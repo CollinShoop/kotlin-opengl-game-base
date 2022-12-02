@@ -1,5 +1,10 @@
 package com.cms.engine.lwjgl.window
 
+import com.cms.engine.lwjgl.input.InputHandler
+import com.cms.engine.lwjgl.input.event.KeyEvent
+import com.cms.engine.lwjgl.input.event.MouseButtonEvent
+import com.cms.engine.lwjgl.input.event.MouseMovedEvent
+import com.cms.engine.lwjgl.input.event.MouseScrollEvent
 import com.cms.engine.lwjgl.sprite.Sprite
 import com.cms.engine.lwjgl.window.view.LetterBoxView
 import org.lwjgl.glfw.*
@@ -35,6 +40,8 @@ data class GameWindow(
     // Temprary assets to be removed
     private var textCursor = Sprite("red.png")
     private var textBg = Sprite("background.png")
+
+    private var inputHandler: InputHandler? = null
 
     // OpenGL Antialiasing
     // See https://github.com/LWJGL/lwjgl3-demos/blob/main/src/org/lwjgl/demo/opengl/fbo/MultisampledFboDemo.java
@@ -80,19 +87,21 @@ data class GameWindow(
 
         // Setup a key callback. It will be called every time a key is pressed, repeated or released.
         GLFW.glfwSetCursorPosCallback(windowId) { _, xpos, ypos ->
-            mouseXPos = xpos.toFloat()
-            mouseYPos = ypos.toFloat()
-            val virtualPos = boxView.projectScreenPointToVirtual(mouseXPos, mouseYPos)
+            val virtualPos = boxView.projectScreenPointToVirtual(xpos.toFloat(),  ypos.toFloat())
             debug("glfwSetCursorPosCallback: xRaw=${xpos}; yRaw=${ypos}; xGraphic=${virtualPos.x}; yGraphic=${virtualPos.y};")
+            inputHandler?.mouseMoved(MouseMovedEvent(xpos, ypos, virtualPos.x, virtualPos.y))
         }
         GLFW.glfwSetMouseButtonCallback(windowId) { _, button, action, mods ->
             debug("glfwSetMouseButtonCallback: button=${button}; action=${action}; mods=${mods};")
+            inputHandler?.mouseButton(MouseButtonEvent(button, action, mods))
         }
         GLFW.glfwSetKeyCallback(windowId) { window: Long, key: Int, scancode: Int, action: Int, mods: Int ->
             debug("glfwSetKeyCallback: key=${key}; scancode=${scancode}; action=${action}; mods=${mods};")
+            inputHandler?.key(KeyEvent(key, scancode, action, mods))
             if (key == GLFW.GLFW_KEY_ESCAPE && action == GLFW.GLFW_RELEASE) GLFW.glfwSetWindowShouldClose(window, true) // We will detect this in the rendering loop
         }
         GLFW.glfwSetScrollCallback(windowId) { _, xoffset, yoffset ->
+            inputHandler?.scroll(MouseScrollEvent(xoffset, yoffset))
             debug("glfwSetScrollCallback: xoffset=${xoffset}; yoffset=${yoffset};")
         }
         GLFW.glfwSetWindowRefreshCallback(windowId) { window: Long -> render() }
