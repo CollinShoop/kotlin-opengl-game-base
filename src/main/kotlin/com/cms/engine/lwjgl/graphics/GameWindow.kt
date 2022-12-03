@@ -1,4 +1,4 @@
-package com.cms.engine.lwjgl.window
+package com.cms.engine.lwjgl.graphics
 
 import com.cms.engine.lwjgl.input.InputHandler
 import com.cms.engine.lwjgl.input.event.KeyEvent
@@ -6,7 +6,7 @@ import com.cms.engine.lwjgl.input.event.MouseButtonEvent
 import com.cms.engine.lwjgl.input.event.MouseMovedEvent
 import com.cms.engine.lwjgl.input.event.MouseScrollEvent
 import com.cms.engine.lwjgl.sprite.Sprite
-import com.cms.engine.lwjgl.window.view.LetterBoxView
+import com.cms.engine.lwjgl.graphics.view.LetterBoxView
 import org.lwjgl.glfw.*
 import org.lwjgl.opengl.ARBFramebufferObject.*
 import org.lwjgl.opengl.GL
