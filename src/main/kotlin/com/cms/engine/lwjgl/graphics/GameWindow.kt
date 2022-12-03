@@ -7,6 +7,7 @@ import com.cms.engine.lwjgl.input.event.MouseMovedEvent
 import com.cms.engine.lwjgl.input.event.MouseScrollEvent
 import com.cms.engine.lwjgl.sprite.Sprite
 import com.cms.engine.lwjgl.graphics.view.LetterBoxView
+import com.cms.engine.lwjgl.input.QueuedInputHandler
 import org.lwjgl.glfw.*
 import org.lwjgl.opengl.ARBFramebufferObject.*
 import org.lwjgl.opengl.GL
@@ -31,17 +32,16 @@ data class GameWindow(
     private var openglDebugCallback: Callback? = null
 
     // Mouse / Keyboard Inputs
-    private var mouseXPos: Float = 0f
-    private var mouseYPos: Float = 0f
+    private val inputs = GameInputHandler()
+    private val glQueuedInputsHandler = QueuedInputHandler(inputs)
 
     // Graphics Helpers
-    private var boxView = LetterBoxView(this.graphicWidth, this.graphicHeight)
+    private val boxView = LetterBoxView(this.graphicWidth, this.graphicHeight)
 
     // Temprary assets to be removed
-    private var textCursor = Sprite("red.png")
-    private var textBg = Sprite("background.png")
+    private val textCursor = Sprite("red.png")
+    private val textBg = Sprite("background.png")
 
-    private var inputHandler: InputHandler? = null
 
     // OpenGL Antialiasing
     // See https://github.com/LWJGL/lwjgl3-demos/blob/main/src/org/lwjgl/demo/opengl/fbo/MultisampledFboDemo.java
@@ -51,6 +51,9 @@ data class GameWindow(
     private var fboId = 0
     private var antialiasSampling = 8
     private var resetFbo = false
+
+    // debug framerate
+    private var frameId = 0
 
     fun run() {
         try {
@@ -89,19 +92,19 @@ data class GameWindow(
         GLFW.glfwSetCursorPosCallback(windowId) { _, xpos, ypos ->
             val virtualPos = boxView.projectScreenPointToVirtual(xpos.toFloat(),  ypos.toFloat())
             debug("glfwSetCursorPosCallback: xRaw=${xpos}; yRaw=${ypos}; xGraphic=${virtualPos.x}; yGraphic=${virtualPos.y};")
-            inputHandler?.mouseMoved(MouseMovedEvent(xpos, ypos, virtualPos.x, virtualPos.y))
+            glQueuedInputsHandler.mouseMoved(MouseMovedEvent(xpos, ypos, virtualPos.x, virtualPos.y))
         }
         GLFW.glfwSetMouseButtonCallback(windowId) { _, button, action, mods ->
             debug("glfwSetMouseButtonCallback: button=${button}; action=${action}; mods=${mods};")
-            inputHandler?.mouseButton(MouseButtonEvent(button, action, mods))
+            glQueuedInputsHandler.mouseButton(MouseButtonEvent(button, action, mods))
         }
         GLFW.glfwSetKeyCallback(windowId) { window: Long, key: Int, scancode: Int, action: Int, mods: Int ->
             debug("glfwSetKeyCallback: key=${key}; scancode=${scancode}; action=${action}; mods=${mods};")
-            inputHandler?.key(KeyEvent(key, scancode, action, mods))
+            glQueuedInputsHandler.key(KeyEvent(key, scancode, action, mods))
             if (key == GLFW.GLFW_KEY_ESCAPE && action == GLFW.GLFW_RELEASE) GLFW.glfwSetWindowShouldClose(window, true) // We will detect this in the rendering loop
         }
         GLFW.glfwSetScrollCallback(windowId) { _, xoffset, yoffset ->
-            inputHandler?.scroll(MouseScrollEvent(xoffset, yoffset))
+            glQueuedInputsHandler.scroll(MouseScrollEvent(xoffset, yoffset))
             debug("glfwSetScrollCallback: xoffset=${xoffset}; yoffset=${yoffset};")
         }
         GLFW.glfwSetWindowRefreshCallback(windowId) { window: Long -> render() }
@@ -165,6 +168,37 @@ data class GameWindow(
                 height
             )
         }
+    }
+
+    class GameInputHandler : InputHandler {
+        var mouseX = 0f
+            private set
+        var mouseY = 0f
+            private set
+        var mouseRealX = 0f
+            private set
+        var mouseRealY = 0f
+            private set
+
+        override fun mouseMoved(e: MouseMovedEvent) {
+            this.mouseX = e.vx
+            this.mouseY = e.vy
+            this.mouseRealX = e.rx.toFloat()
+            this.mouseRealY = e.ry.toFloat()
+        }
+
+        override fun mouseButton(e: MouseButtonEvent) {
+
+        }
+
+        override fun key(e: KeyEvent) {
+
+        }
+
+        override fun scroll(e: MouseScrollEvent) {
+
+        }
+
     }
 
     private fun debug(msg: String) {
@@ -288,6 +322,7 @@ data class GameWindow(
             // Poll for window events. The key callback above will only be
             // invoked during this call.
             GLFW.glfwPollEvents()
+            glQueuedInputsHandler.flush()
 
             render()
         }
@@ -298,9 +333,6 @@ data class GameWindow(
     }
 
     private fun render() {
-        // calculate the position of the mouse in virtual space
-        val mouseMappedToVirtual = boxView.projectScreenPointToVirtual(mouseXPos, mouseYPos)
-
         // render to custom frame buffer
         if (antialiasingEnabled) {
             glBindFramebuffer(GL_FRAMEBUFFER, fboId);
@@ -329,8 +361,8 @@ data class GameWindow(
 
         // highlight the grid cell with the mouse hovered
         val gridSize = (graphicWidth / 32).toInt()
-        val highlightGridX = (mouseMappedToVirtual.x / gridSize).toInt() * gridSize
-        val highlightGridY = (mouseMappedToVirtual.y / gridSize).toInt() * gridSize
+        val highlightGridX = (inputs.mouseX / gridSize).toInt() * gridSize
+        val highlightGridY = (inputs.mouseY / gridSize).toInt() * gridSize
         // draw grid highlight only if it's within virtual view
         if (highlightGridX >= 0 && highlightGridX < graphicWidth && highlightGridY >= 0 && highlightGridY < graphicHeight) {
             glColorBackgroundHighlight()
@@ -358,17 +390,17 @@ data class GameWindow(
 
             // draw line to mouse in view space
             glVertexS(0f, 0f)
-            glVertexS(mouseXPos, mouseYPos)
+            glVertexS(inputs.mouseRealX, inputs.mouseRealY)
 
             // draw a line from the origin to mouse location in virtual space
             glVertexV(0f, 0f)
-            glVertexV(mouseMappedToVirtual.x, mouseMappedToVirtual.y)
+            glVertexV(inputs.mouseX, inputs.mouseY)
 
             // draw a box around the mouse where the cursor should go
             val cursorBox = boxView.projectVirtualRect(
                 Rectangle2D.Float(
-                    mouseMappedToVirtual.x - textCursor.w,
-                    mouseMappedToVirtual.y - textCursor.h,
+                    inputs.mouseX - textCursor.w,
+                    inputs.mouseY - textCursor.h,
                     textCursor.w * 2,
                     textCursor.h * 2
                 )
@@ -408,6 +440,9 @@ data class GameWindow(
     }
     private fun glColorGridLines() {
         glColor4d(0.0, 0.0, 0.0, 0.5)
+    }
+    private fun glTextColor() {
+        glColor4d(0.0, 0.0, 1.0, 0.0)
     }
 
     /*
