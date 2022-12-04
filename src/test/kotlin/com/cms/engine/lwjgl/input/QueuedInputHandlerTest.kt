@@ -1,9 +1,11 @@
 package com.cms.engine.lwjgl.input
 
-import com.cms.engine.lwjgl.input.event.KeyEvent
-import com.cms.engine.lwjgl.input.event.MouseButtonEvent
-import com.cms.engine.lwjgl.input.event.MouseMovedEvent
-import com.cms.engine.lwjgl.input.event.MouseScrollEvent
+import com.cms.engine.input.InputHandler
+import com.cms.engine.input.QueuedInputHandler
+import com.cms.engine.input.event.KeyEvent
+import com.cms.engine.input.event.MouseButtonEvent
+import com.cms.engine.input.event.MouseMovedEvent
+import com.cms.engine.input.event.MouseScrollEvent
 import org.junit.Test
 import kotlin.collections.ArrayList
 import kotlin.test.assertEquals

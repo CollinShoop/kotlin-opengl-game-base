@@ -1,6 +1,6 @@
-package com.cms.engine.lwjgl.input.event
+package com.cms.engine.input.event
 
-import com.cms.engine.lwjgl.input.InputHandler
+import com.cms.engine.input.InputHandler
 
 /**
  * Common type for all queued events. Once de-queued, trigger the event onto another event handler to effectively pop

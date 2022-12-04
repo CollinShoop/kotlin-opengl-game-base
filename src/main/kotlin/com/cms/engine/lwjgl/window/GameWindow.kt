@@ -1,21 +1,73 @@
-package com.cms.engine.lwjgl.graphics
+package com.cms.engine.lwjgl.window
 
-import com.cms.engine.lwjgl.input.InputHandler
-import com.cms.engine.lwjgl.input.event.KeyEvent
-import com.cms.engine.lwjgl.input.event.MouseButtonEvent
-import com.cms.engine.lwjgl.input.event.MouseMovedEvent
-import com.cms.engine.lwjgl.input.event.MouseScrollEvent
+import com.cms.engine.lwjgl.text.GLText
+import com.cms.engine.lwjgl.text.TextRenderer
+import com.cms.engine.lwjgl.util.GLHelpers
+import com.cms.engine.lwjgl.view.LetterBoxView
+import com.cms.engine.input.InputHandler
+import com.cms.engine.input.QueuedInputHandler
+import com.cms.engine.input.event.KeyEvent
+import com.cms.engine.input.event.MouseButtonEvent
+import com.cms.engine.input.event.MouseMovedEvent
+import com.cms.engine.input.event.MouseScrollEvent
 import com.cms.engine.lwjgl.sprite.Sprite
-import com.cms.engine.lwjgl.graphics.view.LetterBoxView
-import com.cms.engine.lwjgl.input.QueuedInputHandler
-import org.lwjgl.glfw.*
-import org.lwjgl.opengl.ARBFramebufferObject.*
+import org.lwjgl.glfw.Callbacks
+import org.lwjgl.glfw.GLFW
+import org.lwjgl.glfw.GLFW.GLFW_KEY_PAGE_DOWN
+import org.lwjgl.glfw.GLFW.GLFW_KEY_PAGE_UP
+import org.lwjgl.glfw.GLFW.GLFW_RELEASE
+import org.lwjgl.glfw.GLFWErrorCallback
+import org.lwjgl.glfw.GLFWFramebufferSizeCallbackI
+import org.lwjgl.glfw.GLFWWindowSizeCallbackI
+import org.lwjgl.opengl.ARBFramebufferObject.GL_COLOR_ATTACHMENT0
+import org.lwjgl.opengl.ARBFramebufferObject.GL_DEPTH24_STENCIL8
+import org.lwjgl.opengl.ARBFramebufferObject.GL_DEPTH_ATTACHMENT
+import org.lwjgl.opengl.ARBFramebufferObject.GL_FRAMEBUFFER
+import org.lwjgl.opengl.ARBFramebufferObject.GL_FRAMEBUFFER_COMPLETE
+import org.lwjgl.opengl.ARBFramebufferObject.GL_MAX_SAMPLES
+import org.lwjgl.opengl.ARBFramebufferObject.GL_READ_FRAMEBUFFER
+import org.lwjgl.opengl.ARBFramebufferObject.GL_RENDERBUFFER
+import org.lwjgl.opengl.ARBFramebufferObject.glBindFramebuffer
+import org.lwjgl.opengl.ARBFramebufferObject.glBindRenderbuffer
+import org.lwjgl.opengl.ARBFramebufferObject.glBlitFramebuffer
+import org.lwjgl.opengl.ARBFramebufferObject.glCheckFramebufferStatus
+import org.lwjgl.opengl.ARBFramebufferObject.glDeleteFramebuffers
+import org.lwjgl.opengl.ARBFramebufferObject.glDeleteRenderbuffers
+import org.lwjgl.opengl.ARBFramebufferObject.glFramebufferRenderbuffer
+import org.lwjgl.opengl.ARBFramebufferObject.glGenFramebuffers
+import org.lwjgl.opengl.ARBFramebufferObject.glGenRenderbuffers
+import org.lwjgl.opengl.ARBFramebufferObject.glRenderbufferStorageMultisample
 import org.lwjgl.opengl.GL
-import org.lwjgl.opengl.GL11.*
+import org.lwjgl.opengl.GL11.GL_BLEND
+import org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT
+import org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT
+import org.lwjgl.opengl.GL11.GL_LINES
+import org.lwjgl.opengl.GL11.GL_NEAREST
+import org.lwjgl.opengl.GL11.GL_ONE
+import org.lwjgl.opengl.GL11.GL_ONE_MINUS_SRC_ALPHA
+import org.lwjgl.opengl.GL11.GL_PROJECTION
+import org.lwjgl.opengl.GL11.GL_RGBA8
+import org.lwjgl.opengl.GL11.glBegin
+import org.lwjgl.opengl.GL11.glBlendFunc
+import org.lwjgl.opengl.GL11.glClear
+import org.lwjgl.opengl.GL11.glClearColor
+import org.lwjgl.opengl.GL11.glColor3d
+import org.lwjgl.opengl.GL11.glColor4d
+import org.lwjgl.opengl.GL11.glColor4f
+import org.lwjgl.opengl.GL11.glEnable
+import org.lwjgl.opengl.GL11.glEnd
+import org.lwjgl.opengl.GL11.glGetInteger
+import org.lwjgl.opengl.GL11.glLoadIdentity
+import org.lwjgl.opengl.GL11.glMatrixMode
+import org.lwjgl.opengl.GL11.glOrtho
+import org.lwjgl.opengl.GL11.glRectf
+import org.lwjgl.opengl.GL11.glVertex2f
+import org.lwjgl.opengl.GL11.glViewport
 import org.lwjgl.opengl.GLUtil
 import org.lwjgl.system.Callback
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
+import java.awt.Color
 import java.awt.geom.Rectangle2D
 
 data class GameWindow(
@@ -23,7 +75,8 @@ data class GameWindow(
     val graphicHeight: Float = 1080f,
     val windowWidth: Int = 500,
     val windowHeight: Int = 500,
-    val windowTitle: String) {
+    val windowTitle: String
+) {
 
     var debug: Boolean = false
     
@@ -37,11 +90,11 @@ data class GameWindow(
 
     // Graphics Helpers
     private val boxView = LetterBoxView(this.graphicWidth, this.graphicHeight)
+    private val textRenderer = TextRenderer(boxView)
 
     // Temprary assets to be removed
     private val textCursor = Sprite("red.png")
     private val textBg = Sprite("background.png")
-
 
     // OpenGL Antialiasing
     // See https://github.com/LWJGL/lwjgl3-demos/blob/main/src/org/lwjgl/demo/opengl/fbo/MultisampledFboDemo.java
@@ -90,7 +143,7 @@ data class GameWindow(
 
         // Setup a key callback. It will be called every time a key is pressed, repeated or released.
         GLFW.glfwSetCursorPosCallback(windowId) { _, xpos, ypos ->
-            val virtualPos = boxView.projectScreenPointToVirtual(xpos.toFloat(),  ypos.toFloat())
+            val virtualPos = boxView.projectScreenPointToVirtual(xpos.toFloat(), ypos.toFloat())
             debug("glfwSetCursorPosCallback: xRaw=${xpos}; yRaw=${ypos}; xGraphic=${virtualPos.x}; yGraphic=${virtualPos.y};")
             glQueuedInputsHandler.mouseMoved(MouseMovedEvent(xpos, ypos, virtualPos.x, virtualPos.y))
         }
@@ -179,6 +232,7 @@ data class GameWindow(
             private set
         var mouseRealY = 0f
             private set
+        var fontSize = 12f
 
         override fun mouseMoved(e: MouseMovedEvent) {
             this.mouseX = e.vx
@@ -188,11 +242,18 @@ data class GameWindow(
         }
 
         override fun mouseButton(e: MouseButtonEvent) {
-
         }
 
         override fun key(e: KeyEvent) {
+            if (e.action == GLFW_RELEASE) {
+                return
+            }
 
+            if (e.key == GLFW_KEY_PAGE_UP) {
+                fontSize++
+            } else if (e.key == GLFW_KEY_PAGE_DOWN) {
+                fontSize--;
+            }
         }
 
         override fun scroll(e: MouseScrollEvent) {
@@ -351,13 +412,14 @@ data class GameWindow(
         glLoadIdentity()
         glOrtho(0.0, 1.0, 1.0, 0.0, -1.0, 1.0)
 
+        // draw letter box background
         val marginX = boxView.getProjectionMarginX()
         val marginY = boxView.getProjectionMarginY()
         glColorBackground()
         glRectf(marginX, marginY, 1 - marginX, 1 - marginY)
 
         // draw background texture
-        textBg.render(boxView.projectVirtualRect(Rectangle2D.Float(0f, 0f, graphicWidth, graphicHeight)))
+//        textBg.render(boxView.projectVirtualRect(Rectangle2D.Float(0f, 0f, graphicWidth, graphicHeight)))
 
         // highlight the grid cell with the mouse hovered
         val gridSize = (graphicWidth / 32).toInt()
@@ -405,13 +467,49 @@ data class GameWindow(
                     textCursor.h * 2
                 )
             )
-            glBox(cursorBox)
+            GLHelpers.rect(cursorBox)
         glEnd()
 
         // draw cursor texture
         textCursor.render(cursorBox)
 
+        // debug frame id
+        val boundDynamicSize = textRenderer.mono("Dynamic: ${inputs.fontSize}\nSecond Line\nThird Line\nFourth Line")
+            .color(Color.red)
+            .debug()
+            .render(inputs.fontSize, inputs.mouseX, inputs.mouseY)
+        textRenderer.mono("Fixed width(700): Right-Center anchored")
+            .color(Color.red)
+            .clamp(GLText.Clamp.RIGHT, GLText.Clamp.CENTER)
+            .debug()
+            .renderFixedWidth(700f, boundDynamicSize.x, boundDynamicSize.y + boundDynamicSize.height/2)
+
+        val boundsRight = textRenderer.mono("Dynamic: Clamp Right Bottom ${inputs.fontSize}")
+            .color(Color.red)
+            .clamp(GLText.Clamp.RIGHT, GLText.Clamp.BOTTOM)
+            .debug()
+            .render(inputs.fontSize, inputs.mouseX, inputs.mouseY)
+
+        textRenderer.mono("Fixed width(500): Center-bottom anchored")
+            .color(Color.red)
+            .clamp(GLText.Clamp.CENTER, GLText.Clamp.BOTTOM)
+            .debug()
+            .renderFixedWidth(500f, boundsRight.x + boundsRight.width / 2, boundsRight.y)
+//
+//        val bounds2 = textRenderer.mono("Hello Fixed Width ${inputs.fontSize*20}")
+//            .color(Color.red.darker())
+//            .debug()
+//            .renderFixedWidth(inputs.fontSize*20, boundDynamicSize.x, boundDynamicSize.y + boundDynamicSize.height)
+//
+//        textRenderer.mono("Hello Fixed Width 2 ${inputs.fontSize*15}")
+//            .color(Color.red.darker().darker())
+//            .clamp(null, GLText.Clamp.CENTER)
+//            .debug()
+//            .renderFixedWidth(inputs.fontSize*15, bounds2.x + bounds2.width, bounds2.y)
+
+        // final render
         if (antialiasingEnabled) {
+            glClearColor()
             // write to default frame buffer
             glBindFramebuffer(GL_FRAMEBUFFER, 0)
             // setup blit to read from custom frame buffer
@@ -442,26 +540,12 @@ data class GameWindow(
         glColor4d(0.0, 0.0, 0.0, 0.5)
     }
     private fun glTextColor() {
-        glColor4d(0.0, 0.0, 1.0, 0.0)
+        glColor4d(0.0, 0.0, 1.0, 1.0)
+    }
+    private fun glClearColor() {
+        glColor4f(0f, 0f, 0f, 0f)
     }
 
-    /*
-        GL Drawing Helpers
-     */
-    private fun glBox(rect: Rectangle2D.Float) {
-        glVertex2f(rect.x, rect.y)
-
-        glVertex2f(rect.x + rect.width, rect.y)
-        glVertex2f(rect.x + rect.width, rect.y)
-
-        glVertex2f(rect.x + rect.width, rect.y + rect.height)
-        glVertex2f(rect.x + rect.width, rect.y + rect.height)
-
-        glVertex2f(rect.x, rect.y + rect.height)
-        glVertex2f(rect.x, rect.y + rect.height)
-
-        glVertex2f(rect.x, rect.y)
-    }
 
     private fun glRectV(x: Number, y: Number, width: Number, height: Number) {
         val mapped = boxView.projectVirtualPoint(x.toFloat(), y.toFloat())

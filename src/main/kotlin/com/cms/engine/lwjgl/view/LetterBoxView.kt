@@ -1,4 +1,4 @@
-package com.cms.engine.lwjgl.graphics.view
+package com.cms.engine.lwjgl.view
 
 import java.awt.geom.Point2D
 import java.awt.geom.Rectangle2D
