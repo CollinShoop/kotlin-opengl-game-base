@@ -1,6 +1,6 @@
-package com.cms.engine.lwjgl.input.event
+package com.cms.engine.input.event
 
-import com.cms.engine.lwjgl.input.InputHandler
+import com.cms.engine.input.InputHandler
 
 /**
  * InputEvent for [InputHandler.mouseMoved]

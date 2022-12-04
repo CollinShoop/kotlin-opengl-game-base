@@ -1,7 +1,11 @@
-package com.cms.engine.lwjgl.input
+package com.cms.engine.input
 
-import com.cms.engine.lwjgl.input.event.*
-import java.util.*
+import com.cms.engine.input.event.InputEvent
+import com.cms.engine.input.event.KeyEvent
+import com.cms.engine.input.event.MouseButtonEvent
+import com.cms.engine.input.event.MouseMovedEvent
+import com.cms.engine.input.event.MouseScrollEvent
+import java.util.Queue
 import java.util.concurrent.ConcurrentLinkedQueue
 
 /**

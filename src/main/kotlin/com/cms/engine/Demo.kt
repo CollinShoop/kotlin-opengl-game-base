@@ -1,6 +1,6 @@
 package com.cms.engine
 
-import com.cms.engine.lwjgl.graphics.GameWindow
+import com.cms.engine.lwjgl.window.GameWindow
 
 class Demo {
 

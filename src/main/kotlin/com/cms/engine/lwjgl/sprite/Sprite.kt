@@ -56,6 +56,7 @@ class Sprite(private var assetName: String) {
         glPopMatrix()
 
         // disable texture rendering
+        glBindTexture(GL_TEXTURE_2D, 0)
         glDisable(GL_TEXTURE_2D)
     }
 
