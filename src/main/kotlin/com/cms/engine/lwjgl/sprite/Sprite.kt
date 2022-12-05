@@ -1,6 +1,7 @@
 package com.cms.engine.lwjgl.sprite
 
 import com.cms.engine.lwjgl.util.AssetUtils
+import com.cms.engine.lwjgl.util.GLHelpers
 import org.lwjgl.opengl.GL11.*
 import org.lwjgl.stb.STBImage
 import org.lwjgl.stb.STBImage.stbi_load_from_memory
@@ -20,7 +21,7 @@ class Sprite(private var assetName: String) {
     private var image: ByteBuffer? = null
     private var comp = 0
 
-    fun render(rect: Rectangle2D.Float) {
+    fun render(rect: Rectangle2D.Float, rotationDegrees: Float = 0f, debug: Boolean = false) {
         // enable texture mapping
         glEnable(GL_TEXTURE_2D)
 
@@ -29,8 +30,17 @@ class Sprite(private var assetName: String) {
 
         // apply a translation / scale matrix for this texture
         glPushMatrix()
+
+        // puts the texture at the desired position
         glTranslatef(rect.x, rect.y, 0.0f)
+        // scale to texture
         glScalef(rect.width/w, rect.height/h, 1f)
+        // render about the texture center point
+        glTranslatef(w/2, h/2, 0.0f)
+        // apply rotation
+        if (rotationDegrees != 0.0f) {
+            glRotatef(rotationDegrees, 0f, 0f, 1f)
+        }
 
         // no explicit color
         glColor4f(1f, 1f, 1f, 1f)
@@ -42,22 +52,39 @@ class Sprite(private var assetName: String) {
         //      transparency.
         glBindTexture(GL_TEXTURE_2D, id)
         glBegin(GL_QUADS)
-        glTexCoord2f(0.0f, 0.0f)
-        glVertex2f(0.0f, 0.0f)
-        glTexCoord2f(1.0f, 0.0f)
-        glVertex2f(w, 0.0f)
-        glTexCoord2f(1.0f, 1.0f)
-        glVertex2f(w, h)
-        glTexCoord2f(0.0f, 1.0f)
-        glVertex2f(0.0f, h)
-        glEnd()
 
-        // remove the translation / scale matrix
-        glPopMatrix()
+        // texture is rendered centered on the origin
+        glTexCoord2f(0.0f, 0.0f)
+        glVertex2f(-w/2, -h/2)
+        glTexCoord2f(1.0f, 0.0f)
+        glVertex2f(w/2, -h/2)
+        glTexCoord2f(1.0f, 1.0f)
+        glVertex2f(w/2, h/2)
+        glTexCoord2f(0.0f, 1.0f)
+        glVertex2f(-w/2, h/2)
+        glEnd()
 
         // disable texture rendering
         glBindTexture(GL_TEXTURE_2D, 0)
         glDisable(GL_TEXTURE_2D)
+
+        // draw debug box
+        if (debug) {
+            glBegin(GL_LINES)
+            glColor4f(1f, 0f, 0f, 1f)
+            GLHelpers.rect(
+                Rectangle2D.Float(
+                    -w / 2,
+                    -h / 2,
+                    w,
+                    h
+                )
+            )
+            glEnd()
+        }
+
+        // remove the translation / scale matrix
+        glPopMatrix()
     }
 
     fun load() {
@@ -99,8 +126,8 @@ class Sprite(private var assetName: String) {
             }
             GL_RGB
         } else {
-            // TODO understand performance implications here
-            // premultiplyAlpha(this.image!!, this.w.toInt(), this.h.toInt())
+            // fixes broken alpha in some png
+            premultiplyAlpha(this.image!!, this.w.toInt(), this.h.toInt())
             GL_RGBA
         }
 
@@ -112,8 +139,7 @@ class Sprite(private var assetName: String) {
     }
 
     /**
-     * Can be applied to RGBA byte buffers but would like to better understand the performance implications before
-     * using it.
+     * Applies alpha mask to the image to ensure no color shows through in transparent areas
      */
     private fun premultiplyAlpha(image: ByteBuffer, w: Int, h: Int) {
         val stride = w * 4
