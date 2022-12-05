@@ -42,7 +42,6 @@ data class GLText(val text: String, val view: LetterBoxView, val textVertexBuffe
     }
 
     fun renderFixedWidth(targetWidth: Float, x: Float, y: Float): Rectangle2D.Float {
-//        val fontSize = width / (text.length * FONT_VIRTUAL_SCALE_X * FONT_SIZE_GRANULARITY)
         val fontSize = (1f/ FONT_SIZE_GRANULARITY) * (targetWidth / this.bufferWidth)
         return render(fontSize, x, y)
     }

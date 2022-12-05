@@ -8,7 +8,7 @@ class TextRenderer(val view: LetterBoxView) {
 
     fun mono(text: String): GLText {
         // render a buffer to store vertex data, ~300 bytes per letter according to stb_easy_font_print
-        val textVertexBuffer = BufferUtils.createByteBuffer(text.length * 300)
+        val textVertexBuffer = BufferUtils.createByteBuffer(text.length * 500)
         // fills the buffer with quad vertex data to draw the string
         val numQuads = STBEasyFont.stb_easy_font_print(
             0f,

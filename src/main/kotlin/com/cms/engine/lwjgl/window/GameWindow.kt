@@ -1,8 +1,6 @@
 package com.cms.engine.lwjgl.window
 
-import com.cms.engine.lwjgl.text.GLText
 import com.cms.engine.lwjgl.text.TextRenderer
-import com.cms.engine.lwjgl.util.GLHelpers
 import com.cms.engine.lwjgl.view.LetterBoxView
 import com.cms.engine.input.InputHandler
 import com.cms.engine.input.QueuedInputHandler
@@ -69,12 +67,14 @@ import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
 import java.awt.Color
 import java.awt.geom.Rectangle2D
+import org.lwjgl.glfw.GLFW.GLFW_CURSOR
+import org.lwjgl.glfw.GLFW.GLFW_CURSOR_HIDDEN
 
 data class GameWindow(
     val graphicWidth: Float = 1920f,
     val graphicHeight: Float = 1080f,
-    val windowWidth: Int = 500,
-    val windowHeight: Int = 500,
+    val windowWidth: Int = 960,
+    val windowHeight: Int = 540,
     val windowTitle: String
 ) {
 
@@ -93,7 +93,7 @@ data class GameWindow(
     private val textRenderer = TextRenderer(boxView)
 
     // Temprary assets to be removed
-    private val textCursor = Sprite("red.png")
+    private val textCursor = Sprite("scimitar.png")
     private val textBg = Sprite("background.png")
 
     // OpenGL Antialiasing
@@ -169,6 +169,9 @@ data class GameWindow(
             debug("glfwSetFramebufferSizeCallback: width=${width}; height=${height};")
             framebufferSizeChanged(width, height)
         }
+        // hide cursor
+        GLFW.glfwSetInputMode(windowId, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+
         MemoryStack.stackPush().use { stack ->
             val pWidth = stack.mallocInt(1) // int*
             val pHeight = stack.mallocInt(1) // int*
@@ -232,7 +235,8 @@ data class GameWindow(
             private set
         var mouseRealY = 0f
             private set
-        var fontSize = 12f
+        var fontSize = 30f
+        var debugRotation = 0f
 
         override fun mouseMoved(e: MouseMovedEvent) {
             this.mouseX = e.vx
@@ -251,8 +255,10 @@ data class GameWindow(
 
             if (e.key == GLFW_KEY_PAGE_UP) {
                 fontSize++
+                debugRotation += 5
             } else if (e.key == GLFW_KEY_PAGE_DOWN) {
-                fontSize--;
+                fontSize--
+                debugRotation -= 5
             }
         }
 
@@ -394,6 +400,8 @@ data class GameWindow(
     }
 
     private fun render() {
+        frameId++
+
         // render to custom frame buffer
         if (antialiasingEnabled) {
             glBindFramebuffer(GL_FRAMEBUFFER, fboId);
@@ -419,7 +427,7 @@ data class GameWindow(
         glRectf(marginX, marginY, 1 - marginX, 1 - marginY)
 
         // draw background texture
-//        textBg.render(boxView.projectVirtualRect(Rectangle2D.Float(0f, 0f, graphicWidth, graphicHeight)))
+        textBg.render(boxView.projectVirtualRect(Rectangle2D.Float(0f, 0f, graphicWidth, graphicHeight)))
 
         // highlight the grid cell with the mouse hovered
         val gridSize = (graphicWidth / 32).toInt()
@@ -459,53 +467,25 @@ data class GameWindow(
             glVertexV(inputs.mouseX, inputs.mouseY)
 
             // draw a box around the mouse where the cursor should go
-            val cursorBox = boxView.projectVirtualRect(
-                Rectangle2D.Float(
-                    inputs.mouseX - textCursor.w,
-                    inputs.mouseY - textCursor.h,
-                    textCursor.w * 2,
-                    textCursor.h * 2
-                )
-            )
-            GLHelpers.rect(cursorBox)
         glEnd()
 
-        // draw cursor texture
-        textCursor.render(cursorBox)
+        // draw cursor
+        val cursorBox = boxView.projectVirtualRect(
+            Rectangle2D.Float(
+                inputs.mouseX,
+                inputs.mouseY,
+                50f,
+                50f
+            )
+        )
+        textCursor.render(cursorBox, rotationDegrees = inputs.debugRotation)
 
         // debug frame id
-        val boundDynamicSize = textRenderer.mono("Dynamic: ${inputs.fontSize}\nSecond Line\nThird Line\nFourth Line")
+        textRenderer
+            .mono("FrameId $frameId FontSize ${inputs.fontSize} DebugRotation ${inputs.debugRotation}")
             .color(Color.red)
             .debug()
-            .render(inputs.fontSize, inputs.mouseX, inputs.mouseY)
-        textRenderer.mono("Fixed width(700): Right-Center anchored")
-            .color(Color.red)
-            .clamp(GLText.Clamp.RIGHT, GLText.Clamp.CENTER)
-            .debug()
-            .renderFixedWidth(700f, boundDynamicSize.x, boundDynamicSize.y + boundDynamicSize.height/2)
-
-        val boundsRight = textRenderer.mono("Dynamic: Clamp Right Bottom ${inputs.fontSize}")
-            .color(Color.red)
-            .clamp(GLText.Clamp.RIGHT, GLText.Clamp.BOTTOM)
-            .debug()
-            .render(inputs.fontSize, inputs.mouseX, inputs.mouseY)
-
-        textRenderer.mono("Fixed width(500): Center-bottom anchored")
-            .color(Color.red)
-            .clamp(GLText.Clamp.CENTER, GLText.Clamp.BOTTOM)
-            .debug()
-            .renderFixedWidth(500f, boundsRight.x + boundsRight.width / 2, boundsRight.y)
-//
-//        val bounds2 = textRenderer.mono("Hello Fixed Width ${inputs.fontSize*20}")
-//            .color(Color.red.darker())
-//            .debug()
-//            .renderFixedWidth(inputs.fontSize*20, boundDynamicSize.x, boundDynamicSize.y + boundDynamicSize.height)
-//
-//        textRenderer.mono("Hello Fixed Width 2 ${inputs.fontSize*15}")
-//            .color(Color.red.darker().darker())
-//            .clamp(null, GLText.Clamp.CENTER)
-//            .debug()
-//            .renderFixedWidth(inputs.fontSize*15, bounds2.x + bounds2.width, bounds2.y)
+            .render(25f, 20f, 20f)
 
         // final render
         if (antialiasingEnabled) {
